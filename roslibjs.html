@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <title>Canvas Layers Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script type="text/javascript"
+    src="https://static.robotwebtools.org/EventEmitter2/current/eventemitter2.min.js"></script>
+  <script type="text/javascript" src="https://static.robotwebtools.org/roslibjs/current/roslib.min.js"></script>
+  <style>
+    .codeground {
+      margin: auto;
+      width: 100%;
+      border: 2px solid #AEBDCC;
+      background-color: #F3F5F7;
+      border-radius: 10px;
+      
+    }
+  </style>
+</head>
+
+<body>
+  <section>
+    <div id="borderDiv" style="position:relative; width:800px; height:600px; border: 2px solid red;margin-top: 5%;">
+      <canvas id="pathLayer" style="z-index: 1; position: absolute;left: 0px;top: 0px;" height="600px" width="800px">
+      </canvas>
+
+      <canvas id="turtleLayer" style="z-index: 1; position: absolute;left: 0px;top: 0px;" height="600px" width="800px">
+        This text is displayed if your browser does not support HTML5 Canvas.
+      </canvas>
+
+
+    </div>
+    <p id="Status">Status: Not Connected</p>
+
+    <script type="text/javascript">
+      var rosaddress = window.location.hostname.replace("8888", 9090);
+      var ros = new ROSLIB.Ros({
+        url: 'wss://' + rosaddress
+      });
+
+      ros.on('connection', function () {
+        document.getElementById('Status').innerHTML = "Status: Connected";
+        // document.write('Connected to ROS server.');
+      });
+
+      ros.on('error', function (error) {
+        document.getElementById('Status').innerHTML = "Status: Connection Error";
+        // document.write('Error connecting to websocket server: ', error);
+        ros.connect('wss://' + rosaddress)
+      });
+
+      ros.on('close', function () {
+        document.getElementById('Status').innerHTML = "Status: Connection Closed";
+        // document.write('Connection to websocket server closed.');
+        ros.connect('wss://' + rosaddress)
+      });
+
+      var listener = new ROSLIB.Topic({
+        ros: ros,
+        name: '/turtle2/cmd_vel',
+        messageType: 'geometry_msgs/Twist'
+      });
+
+      var listenerTurtle = new ROSLIB.Topic({
+        ros: ros,
+        name: '/turtle_spawn',
+        messageType: 'std_msgs/String'
+      });
+
+      var listenerColor = new ROSLIB.Topic({
+        ros: ros,
+        name: '/turtle_color',
+        messageType: 'turtlesim/Num'
+      });
+
+      var color_params = new ROSLIB.Param({
+        ros: ros,
+        name: 'color_params'
+      });
+
+      var turtle_url = new ROSLIB.Param({
+        ros: ros,
+        name: 'url'
+      });
+
+      var pathLayer;
+      var turtleLayer;
+      var pathContext;
+      var turtleContext;
+
+      var widthLine = 2;
+      var heightLine = 2;
+      var xLine = 225;
+      var yLine = 225;
+
+      var width = 50;
+      var height = 50;
+      var x = 225;
+      var y = 225;
+
+      var angle = 0;
+      var moveAngle = 0;
+      var speed = 0;
+      var r = 255;
+      var g = 0;
+      var b = 0;
+      var penWidth = 2;
+      var off;
+      var turtle = new Image();
+
+      function init() {
+        turtle.src = "https://raw.githubusercontent.com/ros/ros_tutorials/noetic-devel/turtlesim/images/box-turtle.png";
+        pathLayer = document.getElementById("pathLayer");
+        pathContext = pathLayer.getContext("2d");
+        turtleLayer = document.getElementById("turtleLayer");
+        turtleContext = turtleLayer.getContext("2d");      
+        drawTurtle(); // first draw      
+        
+        listenerTurtle.subscribe(function (message) {
+          turtle.src = message.data
+        });
+
+        listener.subscribe(function (message) {
+          color_params.get(function (value) {
+            r = value[0];
+            g = value[1];
+            b = value[2];
+            penWidth = value[3];
+            off = value[4];
+            console.log(value)
+          });
+          turtle_url.get(function (url) {
+            turtle.src = url;
+          });
+          moveAngle = message.angular.z;
+          speed = message.linear.x;
+          drawTurtle();
+          if (off == 0) {
+            drawPen();
+          }
+         
+        });
+      }
+
+      function drawTurtle() { //draw2
+        turtleContext.clearRect(0, 0, 800, 600);
+        angle += moveAngle * Math.PI / 180;
+        x += speed * Math.sin(angle);
+        y -= speed * Math.cos(angle);
+        turtleContext.save();        
+        turtleContext.translate(x, y);
+        turtleContext.rotate(angle);
+        turtleContext.drawImage(turtle, width / -2, height / -2, width, height);
+        turtleContext.restore();
+      }
+
+      function drawPen() { //draw3
+        pathContext.save();
+        pathContext.translate(x, y);
+        pathContext.rotate(angle);
+        pathContext.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
+        pathContext.fillRect(penWidth / -2, penWidth / -2, penWidth, penWidth+speed);
+        pathContext.restore();
+      }
+      init();
+    </script>
+  </section>
+  <h1>Understanding ROS Topics, Services, and Parameters</h1>
+  <p>Welcome to the "TurtleSim" Project. Please note that this lecture will only use the documentation part. The turtlesim simulator has been integrated to the documentation as you can see above. You can close the simulator window once you start the process.</p>
+  <p>A simple way to learn the basics of ROS is to use the TurtleSim simulator
+    that is part of the ROS installation.</p>
+  <p>First of all, click the<strong> Start </strong>button under the Riders Project
+    Tree </p>
+  <p>Once the <strong>Start</strong> button clicked, Riders will start roscore and the nodes. You can find these nodes in the<strong> NODES </strong>under the
+    Rides Project Tree. </p>
+  <p>These nodes enable us to change the color of the pen (<strong>Node: set_pen_service</strong>) , change
+    the turtle image (<strong>Node: change_turtle_service</strong>), and move the turtle.(<strong>Node: generate_motion_topic</strong>)</p>
+  <h3>
+    1. rostopic
+  </h3>
+  <p>rostopic is a command-line tool for printing information about ROS
+    Topics.</p>
+  <p>Well, let's try this command. Open the terminal and type</p>
+  <div class="codeground"><p><b><i>$ rostopic</i></b></p></div>
+  <p>and press enter. </p>
+  <p>The output is the current list of supported commands:</p>
+  <div class="codeground">
+    <ul style="list-style-type:none;">
+      <li><b>rostopic bw</b></li>
+      <li><b>rostopic delay</b></li>
+      <li><b>rostopic echo</b></li>
+      <li><b>rostopic find</b></li>
+      <li><b>rostopic hz</b></li>
+      <li><b>rostopic info</b></li>
+      <li><b>rostopic list</b></li>
+      <li><b>rostopic pub</b></li>
+      <li><b>rostopic type</b></li>
+    </ul>
+  </div>
+  <p>Type 'rostopic *command* -h' for more detailed usage, e.g. 'rostopic find
+    -h'</p>
+  <p>Let's do a few examples.</p>
+  <h3>
+    1.1 rostopic list
+  </h3>
+  <p>This command displays a list of current topics. Type </p>
+  <div class="codeground"><p><b><i>$ rostopic list</i></b></p></div>
+  <p>and press enter.</p>
+  <p>Output:</p>
+  <div class="codeground">
+    <ul style="list-style-type:none;">
+      <li>/client_count</li>
+      <li>/clock</li>
+      <li>/connected_clients</li>
+      <li>/gazebo/link_states</li>
+      <li>/gazebo/model_states</li>
+      <li>/gazebo/parameter_description</li>
+      <li>/gazebo/parameter_updates</li>
+      <li>/gazebo/set_link_state</li>
+      <li>/gazebo/set_model_state</li>
+      <li>/rosout</li>
+      <li>/rosout_agg</li>
+      <li>/turtle2/cmd_vel</li>
+    </ul>
+  </div>
+  <p>Find the /turtle2/cmd_vel topic at the end of the list. This topic allows
+    us to move the turtle. As you remember, this topic has been generated by the node <strong>generate_motion_topic</strong>. </p>
+  <h3>
+    1.2 rostopic type
+  </h3>
+  <p>This command displays the type of a topic. Type </p>
+  <div class="codeground"><p><b><i>$ rostopic type /turtle2/cmd_vel</i></b></p></div>
+  <p>and press enter.</p>
+  <p>Output:</p>
+  <div class="codeground"><p><b><i>geometry_msgs/Twist</i></b></p></div>
+  <p>This output means that the type of the topic of the /turtle2/cmd_vel is geometry_msgs/Twist.</p>
+  <h3>
+    1.3 rostopic pub
+  </h3>
+  <p>This command publishes data to a topic.</p>
+  <p>If you want to publish once: </p>
+  <div class="codeground"><p><b><i>$ rostopic pub -1 topic-name message-type message-content</i></b></p></div><br>
+  <div class="codeground">
+    <p>rostopic pub = &gt; Publish command</p>
+    <p>-1 = &gt; Once mode(numerical one (not letter l))</p>
+    <p>topic-name = &gt; The name of the topic you want to publish</p>
+    <p>message-type = &gt; The type of the message</p>
+    <p>message-content = &gt; The content of your message</p>
+  </div>
+  <p>Example</p>
+  <div class="codeground"><p><b><i>$ rostopic pub -1 /turtle2/cmd_vel geometry_msgs/Twist '[1.0,0,0]' '[0,0,0.5]'</i></b></p></div>
+  </p>
+  <p>If you want to publish continuously: </p>
+  <div class="codeground"><p><b><i>$ rostopic pub -r rate-in-hz topic-name message-type message-content</i></b></p></div><br>
+  <div class="codeground">
+    <p> rostopic pub = &gt; Publish command </p>
+    <p>-r = &gt; Rate mode</p>
+    <p>rate-in-hz = &gt; Your rate value in hertz</p>
+    <p>topic-name = &gt; The name of the topic you want to publish</p>
+    <p>message-type = &gt; The type of the message</p>
+    <p>message-content = &gt; The content of your message</p>
+  </div>
+  <p>Example<br>
+  </p>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rostopic pub -r 10 /turtle2/cmd_vel geometry_msgs/Twist '[1.0,0,0]' '[0,0,0.5]'</i></b></p></div>
+  <p>and press enter.</p>
+  <p>The turtle will start moving after entering this command.</p>
+  <h4><b>NOTE</b></h4>
+  <p>The simplest way to get the syntax correct is to use tab completion.
+    Pressing Tab after entering the message type will insert a fully formed
+    YAML dictionary, with all of the fields in the given message type. The
+    tab-generated message will use default values (zero, false, empty string,
+    etc), but you can edit it to contain the real message content that you
+    want.</p>
+    <div class="codeground">
+        <ul style="list-style-type:none;">
+          <li><p><b><i>$ rostopic pub -r 10 /turtle2/cmd_vel geometry_msgs/Twist "linear:</i></b></p></li>
+          <li><p><b>x: 0.0<i></i></b></p></li>
+          <li><p><b>y: 0.0<i></i></b></p></li>
+          <li><p><b>z: 0.0<i></i></b></p></li>
+          <li><p><b>angular:<i></i></b></p></li>
+          <li><p><b>x: 0.0<i></i></b></p></li>
+          <li><p><b>y: 0.0<i></i></b></p></li>
+          <li><p><b>z: 0.0"<i></i></b></p></li>      
+        </ul>
+    </div>
+  <h3>    
+    2. rosservice
+  </h3>
+  <p>The <b>rosservice</b> command implements a variety of commands that let
+    you discover which services are currently online from which nodes and
+    further drill down to get specific information about a service, such as
+    its type, URI, and arguments. You can also call a service directly from
+    the command line.</p>
+  <p>Open terminal, type </p>
+  <div class="codeground"><p><b><i>$ rosservice</i></b></p></div>
+  <p>and press enter</p>
+  <p>The output is the currently supported commands are: </p>
+  <div class="codeground">
+    <ul style="list-style-type:none;">
+      <li><b>rosservice args</b></li>
+      <li><b>rosservice call</b></li>
+      <li><b>rosservice find</b></li>
+      <li><b>rosservice info</b></li>
+      <li><b>rosservice list</b></li>
+      <li><b>rosservice type</b></li>
+      <li><b>rosservice uri</b></li>
+    </ul>
+  </div>
+  <p>Type 'rosservice *command* -h' for more detailed usage, e.g. 'rosservice
+    find -h'</p>
+  <p>Let's do a few examples.</p>
+  <h3>
+    2.1 rosservice list
+  </h3>
+  <p>The <b>rosservice list</b> command lists all the services that are
+    currently available </p>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rosservice list</i></b></p></div>
+  <p>and press enter.</p>
+  <p>The terminal will list the available services. You can see <b>change_color</b>
+    and <b>change_turtle</b> service at the top of the list. These two
+    services allow that you can change the color of the turtle and change the
+    turtle. </p>
+  <h3>
+    2.2 rosservice call
+  </h3>
+  <p>To get a feeling for how services work, you can call them from the command line using this command:</p>
+  <div class="codeground"><p><b><i>$ rosservice call service-name request-content</i></b></p></div>
+  <p>Let's do a example</p>
+  <p>Open the terminal, type </p>
+  <div class="codeground"><p><b><i>$ rosservice call /change_color</i></b></p></div>
+  <p>and press the tab key for autocomplete. Your command will seem like below after the tab key press operation.</p>
+  <div class="codeground"><p><b><i>$ rosservice call /change_color "{r: 0, g: 0, b: 0, width: 0, 'off': 0}"</i></b></p></div>
+  <p>You can enter the RGB value of the color you want as well as enter the width of the pen.</p>
+  <p>If you want to display the pen on the screen, 'off' value should take 0. To make it unvisible it should take 1 respectively.</p>
+  <p>Example:</p>
+  <p>Type in the terminal</p>
+  <div class="codeground"><p><b><i>$ rosservice call /change_color "{r: 0, g: 0, b: 0, width: 3, 'off': 0}"</i></b></p></div>
+  <p>and press enter.</p>
+  <p>You will see that the Turtle is drawing the path it followed so far in black color</p>
+  <p>Another example: </p>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rosservice call /change_turtle </i></b></p></div>
+  <p>and press the tab key for autocomplete. Your command will seem like below after the tab key press operation.</p>
+  <div class="codeground"><p><b><i>$ rosservice call /change_turtle "name: ' '"</i></b></p></div>
+  <p>You can enter "kinetic" or "electric" as the name of the turtle. Choose one and press enter.</p>
+  <div class="codeground"><p><b><i>$ rosservice call /change_turtle "name: 'kinetic'"</i></b></p></div>
+  <p>You will see the turtle image will change accordingly.</p>
+  <p>In our example, we do a service call to our service node (<strong>Node: change_turtle_service</strong>) and this node sets the parameters in the param server using the set_param method. 
+      Turtle gets the current parameters using the get_param method.</p>
+  <img src="https://gitlab.com/BasarSahinbeyoglu/ros-projects/-/raw/master/Turtlesim_Images_1.png" alt="service call">
+  <h3>      
+    3. rosparam
+  </h3>
+  <p>The <b>rosparam</b> tool enables command-line setting and getting of
+    parameters as well as loading and dumping Parameter Server state to a
+    file. </p>
+  <h4>What is a Parameter Server?</h4>
+  <p>A parameter server is a shared, multi-variate dictionary that is
+    accessible via network APIs. Nodes use this server to store and retrieve
+    parameters at runtime. As it is not designed for high-performance, it is
+    best used for static, non-binary data such as configuration parameters. It
+    is meant to be globally viewable so that tools can easily inspect the
+    configuration state of the system and modify if necessary.</p>
+  <p>Let's do an example that change of the turtle and change the color of the turtle without using rosservice.</p>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rosparam</i></b></p></div>
+  <p>press enter.</p>
+  <div class="codeground">
+    <ul style="list-style-type:none;">
+      <li><b>rosparam set</b></li>
+      <li><b>rosparam get</b></li>
+      <li><b>rosparam load</b></li>
+      <li><b>rosparam dump</b></li>
+      <li><b>rosparam delete</b></li>
+      <li><b>rosparam list</b></li>
+    </ul>
+  </div>
+  <p>Type 'rosparam *command* -h' for more detailed usage, e.g. 'rosparam list
+    -h'</p>
+  <h3>
+    3.1 rosparam list
+  </h3>
+  <p>The <b>rosparam list</b> command lists all parameter names</p>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rosparam list</i></b></p></div>
+  <p>and press enter.</p>
+  <p>The terminal will list the available parameters. You will see <b>color_params</b>
+    at the top of the list. This parameter allows you to change the color
+    of the pen. You can also see <b>/url</b> parameter towards the end of the list.
+    This parameter allows you to change the turtle image ny entering the url of an image available online.</p>
+  <h3>
+    3.2 rosparam set
+  </h3>
+  <p>Sets a parameter to a value. parameter-value is required unless --textfile
+    or --binfile are specified</p>
+  <p>Usage,</p>
+  <div class="codeground"><p><b><i>$ rosparam set parameter_name value</i></b></p></div>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rosparam set /color_params "[0, 0, 0, 3, 0]"</i></b></p></div>
+  <p>and press enter.</p>
+  <p>This example gives the same result as the set_pen_service call example we did in
+    service calls, but in this example, we change the color pf th pen by
+    using the parameter server instead of the service calls.</p>
+  <p>Let's do an example to change the turtle image with parameters</p>
+  <p>Open the terminal, type</p>
+  <div class="codeground"><p><b><i>$ rosparam set /url "https://raw.githubusercontent.com/ros/ros_tutorials/melodic-devel/turtlesim/images/kinetic.png"</i></b></p></div>
+  <p>and press enter.</p>
+  <p>This example gives the same result as the change_turtle_service example we did
+    in service calls, but in this example, we change the turtle image 
+    by using the parameter server instead of the service calls. In this case we can change the image of the turtle to any image by entering the url. The change_turtle_service on the contrary, allows you to choose the turtle image from a specified list. Both have use cases according to your application.</p>
+  <img src="https://gitlab.com/BasarSahinbeyoglu/ros-projects/-/raw/master/Turtlesim_Images_2.png" alt="parameter server">
+  <p>You can find the available URLs below</p>
+
+  <b>Default turtle
+    url:</b>https://raw.githubusercontent.com/ros/ros_tutorials/noetic-devel/turtlesim/images/box-turtle.png<br>
+  <b>Kinetic turtle
+    url:</b>https://raw.githubusercontent.com/ros/ros_tutorials/melodic-devel/turtlesim/images/kinetic.png<br>
+  <b>Electric turtle
+    url:</b>https://raw.githubusercontent.com/ros/ros_tutorials/melodic-devel/turtlesim/images/electric.png<br>
+
+
+</body>
+
+</html>
